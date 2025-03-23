@@ -5,7 +5,9 @@ using Arrowgene.Ddon.Shared.Entity.Structure;
 using Arrowgene.Ddon.Shared.Model.Quest;
 using Arrowgene.Ddon.Shared.Network;
 using Arrowgene.Logging;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Arrowgene.Ddon.GameServer.Handler
 {
@@ -31,14 +33,13 @@ namespace Arrowgene.Ddon.GameServer.Handler
 
         public override S2CQuestPlayEndRes Handle(GameClient client, C2SQuestPlayEndReq request)
         {
-            var timeData = Server.PartyQuestContentManager.CancelTimer(client.Party.Id);
+            var (elapsed, _) = Server.PartyQuestContentManager.CancelTimer(client.Party.Id);
             var quest = QuestManager.GetQuestByBoardId(client.Party.ContentId);
-
             client.Party.ExmInProgress = false;
 
             var ntc = new S2CQuestPlayEndNtc();
             ntc.ContentsPlayEnd.RewardItemDetailList = quest.ToCDataTimeGainQuestList(0).RewardItemDetailList;
-            ntc.ContentsPlayEnd.PlayTimeMillSec = (uint) timeData.Elapsed.Milliseconds;
+            ntc.ContentsPlayEnd.PlayTimeMillSec = (uint) elapsed.Milliseconds;
             client.Party.SendToAll(ntc);
 
             return new S2CQuestPlayEndRes();

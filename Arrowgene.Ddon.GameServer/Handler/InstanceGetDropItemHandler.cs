@@ -1,14 +1,13 @@
 using Arrowgene.Ddon.Server;
+using Arrowgene.Ddon.Server.Network;
 using Arrowgene.Ddon.Shared.Entity.PacketStructure;
 using Arrowgene.Ddon.Shared.Entity.Structure;
 using Arrowgene.Ddon.Shared.Model;
-using Arrowgene.Ddon.Shared.Network;
 using Arrowgene.Logging;
-using System.Collections.Generic;
 
 namespace Arrowgene.Ddon.GameServer.Handler
 {
-    public class InstanceGetDropItemHandler : GameStructurePacketHandler<C2SInstanceGetDropItemReq>
+    public class InstanceGetDropItemHandler : GameRequestPacketQueueHandler<C2SInstanceGetDropItemReq, S2CInstanceGetDropItemRes>
     {
         private static readonly ServerLogger Logger = LogProvider.Logger<ServerLogger>(typeof(InstanceGetDropItemHandler));
         
@@ -16,34 +15,11 @@ namespace Arrowgene.Ddon.GameServer.Handler
         {
         }
 
-        public override void Handle(GameClient client, StructurePacket<C2SInstanceGetDropItemReq> packet)
+        public override PacketQueue Handle(GameClient client, C2SInstanceGetDropItemReq request)
         {
-            // This call is for when an item is claimed from a bag. It needs the drops rolled from the enemy to keep track of the items left.
+            var items = client.InstanceDropItemManager.Fetch(request.LayoutId, request.SetId);
 
-            List<InstancedGatheringItem> items = new List<InstancedGatheringItem>();
-
-            if (client.InstanceQuestDropManager.IsQuestDrop(packet.Structure.LayoutId, packet.Structure.SetId))
-            {
-                items.AddRange(client.InstanceQuestDropManager.FetchEnemyLoot());
-            } else
-            {
-                items.AddRange(client.InstanceDropItemManager.GetAssets(packet.Structure.LayoutId, (int)packet.Structure.SetId));
-            }
-
-            // Special Event Items
-            items.AddRange(client.InstanceEventDropItemManager.FetchEventItems(client, packet.Structure.LayoutId, packet.Structure.SetId));
-
-            // Add Epitaph Items
-            items.AddRange(client.InstanceEpiDropItemManager.FetchItems(client, packet.Structure.LayoutId, packet.Structure.SetId));
-
-            S2CInstanceGetDropItemRes res = new()
-            {
-                LayoutId = packet.Structure.LayoutId,
-                SetId = packet.Structure.SetId,
-                GatheringItemGetRequestList = packet.Structure.GatheringItemGetRequestList
-            };
-
-            client.Send(res);
+            PacketQueue queue = new();
 
             S2CItemUpdateCharacterItemNtc ntc = new S2CItemUpdateCharacterItemNtc()
             {
@@ -52,14 +28,21 @@ namespace Arrowgene.Ddon.GameServer.Handler
 
             Server.Database.ExecuteInTransaction(connection =>
             {
-                foreach (CDataGatheringItemGetRequest gatheringItemRequest in packet.Structure.GatheringItemGetRequestList)
+                foreach (CDataGatheringItemGetRequest gatheringItemRequest in request.GatheringItemGetRequestList)
                 {
                     InstancedGatheringItem dropItem = items[(int)gatheringItemRequest.SlotNo];
-                    Server.ItemManager.GatherItem(Server, client.Character, ntc, dropItem, gatheringItemRequest.Num, connection);
+                    queue.AddRange(Server.ItemManager.GatherItem(client, ntc, dropItem, gatheringItemRequest.Num, connection));
                 }
             });
-            
-            client.Send(ntc);
+            client.Enqueue(ntc, queue);
+
+            client.Enqueue(new S2CInstanceGetDropItemRes() 
+            {
+                LayoutId = request.LayoutId,
+                SetId = request.SetId,
+                GatheringItemGetRequestList = request.GatheringItemGetRequestList
+            }, queue);
+            return queue;
         }
     }
 }

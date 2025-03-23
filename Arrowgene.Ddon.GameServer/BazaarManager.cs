@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Linq;
 using Arrowgene.Ddon.Shared.Entity.PacketStructure;
 using Arrowgene.Ddon.Shared.Entity.Structure;
@@ -39,7 +40,7 @@ namespace Arrowgene.Ddon.GameServer
             exhibition.Info.ItemInfo.ExhibitionTime = now;
             exhibition.Info.State = BazaarExhibitionState.OnSale;
             exhibition.Info.Proceeds = calculateProceeds(exhibition.Info.ItemInfo.ItemBaseInfo);
-            exhibition.Info.Expire = now.AddSeconds(Server.GameLogicSettings.BazaarExhibitionTimeSeconds);
+            exhibition.Info.Expire = now.AddSeconds(Server.GameSettings.GameServerSettings.BazaarExhibitionTimeSeconds);
 
             ulong bazaarId = Server.Database.InsertBazaarExhibition(exhibition);
             return bazaarId;
@@ -59,7 +60,7 @@ namespace Arrowgene.Ddon.GameServer
             exhibition.Info.ItemInfo.ItemBaseInfo.Price = newPrice;
             exhibition.Info.ItemInfo.ExhibitionTime = now;
             exhibition.Info.Proceeds = calculateProceeds(exhibition.Info.ItemInfo.ItemBaseInfo);
-            exhibition.Info.Expire = now.AddSeconds(Server.GameLogicSettings.BazaarExhibitionTimeSeconds);
+            exhibition.Info.Expire = now.AddSeconds(Server.GameSettings.GameServerSettings.BazaarExhibitionTimeSeconds);
             Server.Database.UpdateBazaarExhibiton(exhibition);
 
             return exhibition.Info.ItemInfo.BazaarId;
@@ -157,7 +158,7 @@ namespace Arrowgene.Ddon.GameServer
                 ulong totalCooldown;
                 try
                 {
-                    totalCooldown = Server.GameLogicSettings.BazaarCooldownTimeSeconds - Server.GpCourseManager.BazaarReExhibitShorten();
+                    totalCooldown = Server.GameSettings.GameServerSettings.BazaarCooldownTimeSeconds - Server.GpCourseManager.BazaarReExhibitShorten();
                 }
                 catch (OverflowException _)
                 {
@@ -194,9 +195,9 @@ namespace Arrowgene.Ddon.GameServer
             return Server.Database.FetchCharacterBazaarExhibitions(character.CharacterId);
         }
 
-        public List<BazaarExhibition> GetActiveExhibitionsForItemId(uint itemId, Character filterOutCharacter)
+        public List<BazaarExhibition> GetActiveExhibitionsForItemId(uint itemId, Character filterOutCharacter, DbConnection? connectionIn = null)
         {
-            return Server.Database.SelectActiveBazaarExhibitionsByItemIdExcludingOwn(itemId, filterOutCharacter.CharacterId);
+            return Server.Database.SelectActiveBazaarExhibitionsByItemIdExcludingOwn(itemId, filterOutCharacter.CharacterId, connectionIn);
         }
 
         public List<BazaarExhibition> GetActiveExhibitionsForItemIds(List<uint> itemIds, Character filterOutCharacter)

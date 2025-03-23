@@ -59,35 +59,24 @@ namespace Arrowgene.Ddon.GameServer.Handler
             }
             if (client.Character.MyPawnSlotNum < request.SlotNo)
             {
-                Logger.Error($"Character with ID {client.Character.CharacterId} has attempted to create a pawn without having the necessary number of slots: {client.Character.MyPawnSlotNum}/{request.SlotNo}. Client should have disallowed that, sending error response.");
-                return new S2CPawnCreatePawnRes()
-                {
-                    Error = (uint)ErrorCode.ERROR_CODE_PAWN_INVALID_SLOT_NO
-                };
+                throw new ResponseErrorException(ErrorCode.ERROR_CODE_PAWN_INVALID_SLOT_NO,
+                    $"Character with ID {client.Character.CharacterId} has attempted to create a pawn without having the necessary number of slots: {client.Character.MyPawnSlotNum}/{request.SlotNo}. Client should have disallowed that.");
             }
             if (request.SlotNo > 1)
             {
                 // We need to consume 10 rift crystals for the cost
-                var result = Server.ItemManager.ConsumeItemByIdFromMultipleStorages(Server, client.Character, ItemManager.BothStorageTypes, 10133, 10);
-                if (result == null)
+                var result = Server.ItemManager.ConsumeItemByIdFromMultipleStorages(Server, client.Character, ItemManager.BothStorageTypes, 10133, 10)
+                    ?? throw new ResponseErrorException(ErrorCode.ERROR_CODE_CHARACTER_ITEM_NOT_FOUND,
+                    $"Character with ID {client.Character.CharacterId} has attempted to create a pawn without having the necessary number of riftstone shards.");
+
+                client.Send(new S2CItemUpdateCharacterItemNtc()
                 {
-                    Logger.Debug($"Character with ID {client.Character.CharacterId} has attempted to create a pawn without having the necessary number of riftstone shards, sending error response.");
-                    return new S2CPawnCreatePawnRes()
-                    {
-                        Error = (uint)ErrorCode.ERROR_CODE_CHARACTER_ITEM_NOT_FOUND
-                    };
-                }
-                else
-                {
-                    client.Send(new S2CItemUpdateCharacterItemNtc()
-                    {
-                        UpdateType = ItemNoticeType.CreatePawn,
-                        UpdateItemList = new()
+                    UpdateType = ItemNoticeType.CreatePawn,
+                    UpdateItemList = new()
                         {
                             result
                         }
-                    });
-                }
+                });
             }           
             
             Pawn pawn = new Pawn(client.Character.CharacterId)
@@ -158,7 +147,7 @@ namespace Arrowgene.Ddon.GameServer.Handler
                 GainMagicDefense = activeJobPreset.GainMagicDefense,
             };
 
-            pawn.CharacterJobDataList = Server.AssetRepository.ArisenAsset.Select(arisenPreset => new CDataCharacterJobData
+            pawn.CharacterJobDataList = Server.AssetRepository.ArisenAsset.Where(x => x.Job == pawn.Job).Select(arisenPreset => new CDataCharacterJobData
             {
                 Job = arisenPreset.Job,
                 Exp = arisenPreset.Exp,
@@ -463,6 +452,15 @@ namespace Arrowgene.Ddon.GameServer.Handler
             pawn.TrainingPoints = int.MaxValue;
             pawn.AvailableTraining = uint.MaxValue;
             pawn.PawnReactionList = Enumerable.Range(1, 11).Select(x => new CDataPawnReaction() { ReactionType = (byte)x, MotionNo = 1 }).ToList();
+
+            foreach (JobId job in Enum.GetValues(typeof(JobId)))
+            {
+                var startingSkill = SkillData.AllSkills.Where(x => x.Job == job && x.Params.FirstOrDefault()?.RequireJobLevel == 0).FirstOrDefault();
+                if (startingSkill != null && !pawn.LearnedCustomSkills.Where(x => (x.Job == job) && (x.SkillId == startingSkill.SkillNo)).Any())
+                {
+                    pawn.LearnedCustomSkills.Add(new() { Job = job, SkillId = startingSkill.SkillNo, SkillLv = 1 });
+                }
+            }
 
             // Add current job's equipment to the equipment storage
             // EquipmentTemplate.TOTAL_EQUIP_SLOTS * 2

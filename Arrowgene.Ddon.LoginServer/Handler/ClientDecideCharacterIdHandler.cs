@@ -1,21 +1,25 @@
-using System;
-using System.Linq;
 using Arrowgene.Ddon.Server;
+using Arrowgene.Ddon.Server.Network;
 using Arrowgene.Ddon.Shared.Entity.PacketStructure;
 using Arrowgene.Ddon.Shared.Entity.Structure;
 using Arrowgene.Ddon.Shared.Model;
-using Arrowgene.Ddon.Shared.Network;
 using Arrowgene.Logging;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Threading.Tasks;
 
 namespace Arrowgene.Ddon.LoginServer.Handler
 {
-    public class ClientDecideCharacterIdHandler : LoginStructurePacketHandler<C2LDecideCharacterIdReq>
+    public class ClientDecideCharacterIdHandler : LoginRequestPacketQueueHandler<C2LDecideCharacterIdReq, L2CDecideCharacterIdRes>
     {
         private static readonly ServerLogger Logger =
             LogProvider.Logger<ServerLogger>(typeof(ClientDecideCharacterIdHandler));
 
         private static int LoadBalanceServerIndex = 0;
         private static object LoadBalanceLock = new object();
+
 
         public ClientDecideCharacterIdHandler(DdonLoginServer server) : base(server)
         {
@@ -26,36 +30,44 @@ namespace Arrowgene.Ddon.LoginServer.Handler
             }
         }
 
-        public override void Handle(LoginClient client, StructurePacket<C2LDecideCharacterIdReq> packet)
+        public override PacketQueue Handle(LoginClient client, C2LDecideCharacterIdReq request)
         {
-            client.SelectedCharacterId = packet.Structure.CharacterId;
+            PacketQueue packetQueue = new();
 
-            L2CDecideCharacterIdRes res = new L2CDecideCharacterIdRes();
-            res.CharacterId = packet.Structure.CharacterId;
-            res.WaitNum = packet.Structure.WaitNum;
-            client.Send(res);
+            client.SelectedCharacterId = request.CharacterId;
 
-            // This is NOT required to get in game (can be commented out entirely).
-            // Causes a "Server is busy, 100 people waiting message" if L2CNextConnectionServerNtc isn't sent
-            L2CLoginWaitNumNtc waitNumNtc = new L2CLoginWaitNumNtc();
-            waitNumNtc.Unknown = 100;
-            client.Send(waitNumNtc);
+            client.Enqueue(new L2CDecideCharacterIdRes()
+            {
+                CharacterId = request.CharacterId,
+                WaitNum = request.WaitNum
+            }, packetQueue);
 
             // TODO: Figure out packet.Structure.RotationServerId. Always a 2?
 
-            CDataGameServerListInfo serverListInfo;
-            lock(LoadBalanceLock)
-            {   
-                serverListInfo = Server.AssetRepository.ServerList[LoadBalanceServerIndex].ToCDataGameServerListInfo();
-                LoadBalanceServerIndex = (LoadBalanceServerIndex + 1) % Server.AssetRepository.ServerList.Count;
+            CDataGameServerListInfo serverListInfo = Server.LoginQueueManager.GetBalancedServer();
+
+            if (serverListInfo is not null)
+            {
+                Logger.Info(client, $"Connecting To: {serverListInfo.Addr}:{serverListInfo.Port}");
+
+                client.Enqueue(new L2CNextConnectionServerNtc()
+                {
+                    ServerList = serverListInfo,
+                    Counter = request.Counter
+                }, packetQueue);
+            }
+            else
+            {
+                var currentQueue = Server.LoginQueueManager.Enqueue(client.Account.Id);
+                client.Enqueue(new L2CLoginWaitNumNtc()
+                {
+                    WaitNum = (uint)currentQueue
+                }, packetQueue);
             }
 
-            Logger.Info(client, $"Connecting To: {serverListInfo.Addr}:{serverListInfo.Port}");
-
-            L2CNextConnectionServerNtc serverNtc = new L2CNextConnectionServerNtc();
-            serverNtc.ServerList = serverListInfo;
-            serverNtc.Counter = packet.Structure.Counter;
-            client.Send(serverNtc);
+            return packetQueue;
         }
+
+        
     }
 }

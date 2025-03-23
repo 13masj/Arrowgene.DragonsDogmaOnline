@@ -1,66 +1,56 @@
-using System.Collections.Generic;
 using Arrowgene.Ddon.Server;
-using Arrowgene.Ddon.Server.Network;
-using Arrowgene.Ddon.Server.Scripting.interfaces;
 using Arrowgene.Ddon.Shared.Entity.PacketStructure;
 using Arrowgene.Ddon.Shared.Entity.Structure;
-using Arrowgene.Ddon.Shared.Network;
 using Arrowgene.Logging;
+using System.Collections.Generic;
 
 namespace Arrowgene.Ddon.LoginServer.Handler
 {
-    public class GetLoginSettingHandler : PacketHandler<LoginClient>
+    public class GetLoginSettingHandler : LoginRequestPacketHandler<C2LGetLoginSettingReq, L2CGetLoginSettingRes>
     {
         private static readonly ServerLogger Logger = LogProvider.Logger<ServerLogger>(typeof(GetLoginSettingHandler));
 
-        private readonly LoginServerSetting _setting;
-        private readonly GameLogicSetting _gameSetting;
-
         public GetLoginSettingHandler(DdonLoginServer server) : base(server)
         {
-            _setting = server.Setting;
-            _gameSetting = server.GameSetting;
         }
 
-        public override PacketId Id => PacketId.C2L_GET_LOGIN_SETTING_REQ;
-
-        public override void Handle(LoginClient client, IPacket packet)
+        public override L2CGetLoginSettingRes Handle(LoginClient client, C2LGetLoginSettingReq request)
         {
-            L2CGetLoginSettingsRes entity = new L2CGetLoginSettingsRes
+            L2CGetLoginSettingRes response = new L2CGetLoginSettingRes
             {
                 LoginSetting =
                 {
-                    JobLevelMax = _gameSetting.JobLevelMax,
-                    ClanMemberMax = _gameSetting.ClanMemberMax,
-                    CharacterNumMax = _gameSetting.CharacterNumMax,
-                    EnableVisualEquip = _gameSetting.EnableVisualEquip,
-                    FriendListMax = _gameSetting.FriendListMax,
+                    JobLevelMax = Server.GameSetting.GameServerSettings.JobLevelMax,
+                    ClanMemberMax = Server.GameSetting.GameServerSettings.ClanMemberMax,
+                    CharacterNumMax = Server.GameSetting.GameServerSettings.CharacterNumMax,
+                    EnableVisualEquip = Server.GameSetting.GameServerSettings.EnableVisualEquip,
+                    FriendListMax = Server.GameSetting.GameServerSettings.FriendListMax,
                     URLInfoList = new List<CDataURLInfo>()
                     {
-                        new CDataURLInfo {Type = 1, URL = _gameSetting.UrlManual},
-                        new CDataURLInfo {Type = 2, URL = _gameSetting.UrlShopDetail},
-                        new CDataURLInfo {Type = 3, URL = _gameSetting.UrlShopCounterA},
-                        new CDataURLInfo {Type = 4, URL = _gameSetting.UrlShopAttention},
-                        new CDataURLInfo {Type = 5, URL = _gameSetting.UrlShopStoneLimit},
-                        new CDataURLInfo {Type = 6, URL = _gameSetting.UrlShopCounterB},
-                        new CDataURLInfo {Type = 7, URL = _gameSetting.UrlChargeCallback},
-                        new CDataURLInfo {Type = 8, URL = _gameSetting.UrlChargeA},
-                        new CDataURLInfo {Type = 9, URL = _gameSetting.UrlSample9},
-                        new CDataURLInfo {Type = 10, URL = _gameSetting.UrlSample10},
-                        new CDataURLInfo {Type = 11, URL = _gameSetting.UrlCampaignBanner},
-                        new CDataURLInfo {Type = 12, URL = _gameSetting.UrlSupportIndex},
-                        new CDataURLInfo {Type = 13, URL = _gameSetting.UrlPhotoupAuthorize},
-                        new CDataURLInfo {Type = 14, URL = _gameSetting.UrlApiA},
-                        new CDataURLInfo {Type = 15, URL = _gameSetting.UrlApiB},
-                        new CDataURLInfo {Type = 16, URL = _gameSetting.UrlIndex},
-                        new CDataURLInfo {Type = 17, URL = _gameSetting.UrlCampaign},
-                        new CDataURLInfo {Type = 19, URL = _gameSetting.UrlChargeB},
-                        new CDataURLInfo {Type = 20, URL = _gameSetting.UrlCompanionImage},
+                        new CDataURLInfo {Type = 1, URL = Server.GameSetting.GameServerSettings.UrlManual},
+                        new CDataURLInfo {Type = 2, URL = Server.GameSetting.GameServerSettings.UrlShopDetail},
+                        new CDataURLInfo {Type = 3, URL = Server.GameSetting.GameServerSettings.UrlShopCounterA},
+                        new CDataURLInfo {Type = 4, URL = Server.GameSetting.GameServerSettings.UrlShopAttention},
+                        new CDataURLInfo {Type = 5, URL = Server.GameSetting.GameServerSettings.UrlShopStoneLimit},
+                        new CDataURLInfo {Type = 6, URL = Server.GameSetting.GameServerSettings.UrlShopCounterB},
+                        new CDataURLInfo {Type = 7, URL = Server.GameSetting.GameServerSettings.UrlChargeCallback},
+                        new CDataURLInfo {Type = 8, URL = Server.GameSetting.GameServerSettings.UrlChargeA},
+                        new CDataURLInfo {Type = 9, URL = Server.GameSetting.GameServerSettings.UrlSample9},
+                        new CDataURLInfo {Type = 10, URL = Server.GameSetting.GameServerSettings.UrlSample10},
+                        new CDataURLInfo {Type = 11, URL = Server.GameSetting.GameServerSettings.UrlCampaignBanner},
+                        new CDataURLInfo {Type = 12, URL = Server.GameSetting.GameServerSettings.UrlSupportIndex},
+                        new CDataURLInfo {Type = 13, URL = Server.GameSetting.GameServerSettings.UrlPhotoupAuthorize},
+                        new CDataURLInfo {Type = 14, URL = Server.GameSetting.GameServerSettings.UrlApiA},
+                        new CDataURLInfo {Type = 15, URL = Server.GameSetting.GameServerSettings.UrlApiB},
+                        new CDataURLInfo {Type = 16, URL = Server.GameSetting.GameServerSettings.UrlIndex},
+                        new CDataURLInfo {Type = 17, URL = Server.GameSetting.GameServerSettings.UrlCampaign},
+                        new CDataURLInfo {Type = 19, URL = Server.GameSetting.GameServerSettings.UrlChargeB},
+                        new CDataURLInfo {Type = 20, URL = Server.GameSetting.GameServerSettings.UrlCompanionImage},
                     },
-                    NoOperationTimeOutTime = _setting.NoOperationTimeOutTime,
+                    NoOperationTimeOutTime = Server.Setting.NoOperationTimeOutTime,
                 },
             };
-            client.Send(entity);
+            return response;
         }
     }
 }

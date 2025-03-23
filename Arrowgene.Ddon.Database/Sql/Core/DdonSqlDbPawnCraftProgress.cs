@@ -31,97 +31,79 @@ namespace Arrowgene.Ddon.Database.Sql.Core
         private const string SqlDeletePawnCraftProgress =
             "DELETE FROM \"ddon_pawn_craft_progress\" WHERE \"craft_character_id\" = @craft_character_id AND \"craft_lead_pawn_id\" = @craft_lead_pawn_id;";
 
-        public bool ReplacePawnCraftProgress(CraftProgress craftProgress)
+        public bool ReplacePawnCraftProgress(CraftProgress craftProgress, DbConnection? connectionIn = null)
         {
-            using TCon connection = OpenNewConnection();
-            return ReplacePawnCraftProgress(connection, craftProgress);
-        }
-
-        public bool ReplacePawnCraftProgress(TCon connection, CraftProgress craftProgress)
-        {
-            Logger.Debug("Inserting pawn craft progress.");
-            if (!InsertIfNotExistsPawnCraftProgress(connection, craftProgress))
+            return ExecuteQuerySafe(connectionIn, connection =>
             {
-                Logger.Debug("Pawn craft progress already exists, replacing.");
-                return UpdatePawnCraftProgress(connection, craftProgress);
-            }
+                Logger.Debug("Inserting pawn craft progress.");
+                if (!InsertIfNotExistsPawnCraftProgress(craftProgress, connection))
+                {
+                    Logger.Debug("Pawn craft progress already exists, replacing.");
+                    return UpdatePawnCraftProgress(craftProgress, connection);
+                }
 
-            return true;
+                return true;
+            });
         }
 
         public bool InsertPawnCraftProgress(CraftProgress craftProgress, DbConnection? connectionIn = null)
         {
-            bool isTransaction = connectionIn is not null;
-            TCon connection = (TCon)(connectionIn ?? OpenNewConnection());
-            try
+            return ExecuteQuerySafe(connectionIn, connection =>
             {
                 return ExecuteNonQuery(connection, SqlInsertPawnCraftProgress, command => { AddAllParameters(command, craftProgress); }) == 1;
-            }
-            finally
+            });
+        }
+
+        public bool InsertIfNotExistsPawnCraftProgress(CraftProgress craftProgress, DbConnection? connectionIn = null)
+        {
+            return ExecuteQuerySafe(connectionIn, connection =>
             {
-                if (!isTransaction) connection.Dispose();
-            }
+                return ExecuteNonQuery(connection, SqlInsertIfNotExistsPawnCraftProgress, command => { 
+                    AddAllParameters(command, craftProgress); 
+                }) == 1;
+            });
         }
 
-        public bool InsertIfNotExistsPawnCraftProgress(CraftProgress craftProgress)
+        public bool UpdatePawnCraftProgress(CraftProgress craftProgress, DbConnection? connectionIn = null)
         {
-            using TCon connection = OpenNewConnection();
-            return InsertIfNotExistsPawnCraftProgress(connection, craftProgress);
-        }
-
-        public bool InsertIfNotExistsPawnCraftProgress(TCon connection, CraftProgress craftProgress)
-        {
-            return ExecuteNonQuery(connection, SqlInsertIfNotExistsPawnCraftProgress, command => { AddAllParameters(command, craftProgress); }) == 1;
-        }
-
-        public bool UpdatePawnCraftProgress(CraftProgress craftProgress)
-        {
-            using TCon connection = OpenNewConnection();
-            return UpdatePawnCraftProgress(connection, craftProgress);
-        }
-
-        public bool UpdatePawnCraftProgress(TCon connection, CraftProgress craftProgress)
-        {
-            return ExecuteNonQuery(connection, SqlUpdatePawnCraftProgress, command => { AddAllParameters(command, craftProgress); }) == 1;
-        }
-
-        public bool DeletePawnCraftProgress(uint craftCharacterId, uint craftLeadPawnId)
-        {
-            using TCon connection = OpenNewConnection();
-            return DeletePawnCraftProgress(connection, craftCharacterId, craftLeadPawnId);
-        }
-
-        public bool DeletePawnCraftProgress(TCon connection, uint craftCharacterId, uint craftLeadPawnId)
-        {
-            return ExecuteNonQuery(connection, SqlDeletePawnCraftProgress, command =>
+            return ExecuteQuerySafe(connectionIn, connection =>
             {
-                AddParameter(command, "@craft_character_id", craftCharacterId);
-                AddParameter(command, "@craft_lead_pawn_id", craftLeadPawnId);
-            }) == 1;
+                return ExecuteNonQuery(connection, SqlUpdatePawnCraftProgress, command => { 
+                    AddAllParameters(command, craftProgress); 
+                }) == 1;
+            });
         }
 
-        public CraftProgress SelectPawnCraftProgress(uint craftCharacterId, uint craftLeadPawnId)
+        public bool DeletePawnCraftProgress(uint craftCharacterId, uint craftLeadPawnId, DbConnection? connectionIn = null)
         {
-            using TCon connection = OpenNewConnection();
-            return SelectPawnCraftProgress(connection, craftCharacterId, craftLeadPawnId);
-        }
-
-        public CraftProgress SelectPawnCraftProgress(TCon connection, uint craftCharacterId, uint craftLeadPawnId)
-        {
-            CraftProgress craftProgress = null;
-            ExecuteReader(connection, SqlSelectPawnCraftProgress,
-                command =>
+            return ExecuteQuerySafe<bool>(connectionIn, (connection) => {
+                return ExecuteNonQuery(connection, SqlDeletePawnCraftProgress, command =>
                 {
                     AddParameter(command, "@craft_character_id", craftCharacterId);
                     AddParameter(command, "@craft_lead_pawn_id", craftLeadPawnId);
-                }, reader =>
-                {
-                    if (reader.Read())
+                }) == 1;
+            });
+        }
+
+        public CraftProgress SelectPawnCraftProgress(uint craftCharacterId, uint craftLeadPawnId, DbConnection? connectionIn = null)
+        {
+            return ExecuteQuerySafe<CraftProgress>(connectionIn, (connection) =>
+            {
+                CraftProgress craftProgress = null;
+                ExecuteReader(connection, SqlSelectPawnCraftProgress,
+                    command =>
                     {
-                        craftProgress = ReadAllCraftProgressData(reader);
-                    }
-                });
-            return craftProgress;
+                        AddParameter(command, "@craft_character_id", craftCharacterId);
+                        AddParameter(command, "@craft_lead_pawn_id", craftLeadPawnId);
+                    }, reader =>
+                    {
+                        if (reader.Read())
+                        {
+                            craftProgress = ReadAllCraftProgressData(reader);
+                        }
+                    });
+                return craftProgress;
+            });
         }
 
         private CraftProgress ReadAllCraftProgressData(TReader reader)

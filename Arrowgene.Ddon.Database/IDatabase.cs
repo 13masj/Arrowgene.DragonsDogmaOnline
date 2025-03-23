@@ -27,6 +27,8 @@ namespace Arrowgene.Ddon.Database
             Action<DbCommand> commandAction,
             Action<DbDataReader> readAction
         );
+        void ExecuteQuerySafe(DbConnection? connectionIn, Action<DbConnection> work);
+        T ExecuteQuerySafe<T>(DbConnection? connectionIn, Func<DbConnection, T> work);
 
         // Generic functions for getting/setting
         void AddParameter(DbCommand command, string name, object? value, DbType type);
@@ -118,9 +120,9 @@ namespace Arrowgene.Ddon.Database
             Character searchingCharacter,
             CDataPawnSearchParameter searchParams
         );
-        bool DeletePawn(uint pawnId);
-        bool UpdatePawnBaseInfo(Pawn pawn);
-        uint GetPawnOwnerCharacterId(uint pawnId);
+        bool DeletePawn(uint pawnId, DbConnection? connectionIn = null);
+        bool UpdatePawnBaseInfo(Pawn pawn, DbConnection? connectionIn = null);
+        uint GetPawnOwnerCharacterId(uint pawnId, DbConnection? connectionIn = null);
         bool ReplacePawnReaction(uint pawnId, CDataPawnReaction pawnReaction, DbConnection? connectionIn = null);
 
         // Pawn Training Status
@@ -130,12 +132,12 @@ namespace Arrowgene.Ddon.Database
         bool UpdatePawnTrainingStatus(uint pawnId, JobId job, byte[] pawnTrainingStatus);
 
         #region Pawn craft progress
-        bool ReplacePawnCraftProgress(CraftProgress craftProgress);
+        bool ReplacePawnCraftProgress(CraftProgress craftProgress, DbConnection? connectionIn = null);
         bool InsertPawnCraftProgress(CraftProgress craftProgress, DbConnection? connectionIn = null);
-        bool InsertIfNotExistsPawnCraftProgress(CraftProgress craftProgress);
-        bool UpdatePawnCraftProgress(CraftProgress craftProgress);
-        bool DeletePawnCraftProgress(uint craftCharacterId, uint craftLeadPawnId);
-        CraftProgress SelectPawnCraftProgress(uint craftCharacterId, uint craftLeadPawnId);
+        bool InsertIfNotExistsPawnCraftProgress(CraftProgress craftProgress, DbConnection? connectionIn = null);
+        bool UpdatePawnCraftProgress(CraftProgress craftProgress, DbConnection? connectionIn = null);
+        bool DeletePawnCraftProgress(uint craftCharacterId, uint craftLeadPawnId, DbConnection? connectionIn = null);
+        CraftProgress SelectPawnCraftProgress(uint craftCharacterId, uint craftLeadPawnId, DbConnection? connectionIn = null);
         #endregion
 
         // Pawn Sp Skills
@@ -294,7 +296,7 @@ namespace Arrowgene.Ddon.Database
         bool ReplaceAbilityPreset(uint characterId, CDataPresetAbilityParam preset);
         bool UpdateAbilityPreset(uint characterId, CDataPresetAbilityParam preset);
 
-        bool InsertSecretAbilityUnlock(uint commonId, SecretAbility secretAbility);
+        bool InsertSecretAbilityUnlock(uint commonId, SecretAbility secretAbility, DbConnection? connectionIn = null);
         List<SecretAbility> SelectAllUnlockedSecretAbilities(uint commonId);
 
         // (Learned) Normal Skills / Learned Core Skills
@@ -408,11 +410,13 @@ namespace Arrowgene.Ddon.Database
         List<BazaarExhibition> FetchCharacterBazaarExhibitions(uint characterId);
         List<BazaarExhibition> SelectActiveBazaarExhibitionsByItemIdExcludingOwn(
             uint itemId,
-            uint excludedCharacterId
+            uint excludedCharacterId,
+            DbConnection? connectionIn = null
         );
         List<BazaarExhibition> SelectActiveBazaarExhibitionsByItemIdsExcludingOwn(
             List<uint> itemIds,
-            uint excludedCharacterId
+            uint excludedCharacterId,
+            DbConnection? connectionIn = null
         );
 
         // Rewards
@@ -581,9 +585,9 @@ namespace Arrowgene.Ddon.Database
         bool UpdateClanMember(CDataClanMemberInfo memberInfo, uint clanId, DbConnection? connectionIn = null);
         List<uint> SelectClanShopPurchases(uint clanId, DbConnection? connectionIn = null);
         bool InsertClanShopPurchase(uint clanId, uint lineupId, DbConnection? connectionIn = null);
-        List<(ClanBaseCustomizationType Type, uint Id)> SelectClanBaseCustomizations(uint clanId, DbConnection? connectionIn = null);
-        bool InsertOrUpdateClanBaseCustomization(uint clanId, ClanBaseCustomizationType type, uint furnitureId, DbConnection? connectionIn = null);
-        bool DeleteClanBaseCustomization(uint clanId, ClanBaseCustomizationType type, DbConnection? connectionIn = null);
+        List<(byte Type, uint Id)> SelectClanBaseCustomizations(uint clanId, DbConnection? connectionIn = null);
+        bool InsertOrUpdateClanBaseCustomization(uint clanId, byte type, uint furnitureId, DbConnection? connectionIn = null);
+        bool DeleteClanBaseCustomization(uint clanId, byte type, DbConnection? connectionIn = null);
 
         // Epitaph Road
         bool InsertEpitaphRoadUnlock(uint characterId, uint epitaphId, DbConnection? connectionIn = null);
@@ -596,5 +600,38 @@ namespace Arrowgene.Ddon.Database
         // Scheduler
         Dictionary<TaskType, SchedulerTaskEntry> SelectAllTaskEntries();
         bool UpdateScheduleInfo(TaskType type, long timestamp);
+
+        // Area Rank
+        bool InsertAreaRank(uint characterId, AreaRank areaRank, DbConnection? connectionIn = null);
+        bool UpdateAreaRank(uint characterId, AreaRank areaRank, DbConnection? connectionIn = null);
+        Dictionary<QuestAreaId, AreaRank> SelectAreaRank(uint characterId, DbConnection? connectionIn = null);
+        List<(uint CharacterId, AreaRank Rank)> SelectAllAreaRank(DbConnection? connectionIn = null);
+        bool ResetAreaRankPoint(DbConnection? connectionIn = null);
+        bool InsertAreaRankSupply(uint characterId, QuestAreaId areaId, uint index, uint itemId, uint num, DbConnection? connectionIn = null);
+        bool UpdateAreaRankSupply(uint characterId, QuestAreaId areaId, uint index, uint itemId, uint num, DbConnection? connectionIn = null);
+        Dictionary<QuestAreaId, List<CDataRewardItemInfo>> SelectAreaRankSupply(uint characterId, DbConnection? connectionIn = null);
+        List<CDataRewardItemInfo> SelectAreaRankSupply(uint characterId, QuestAreaId areaId, DbConnection? connectionIn = null);
+        bool DeleteAreaRankSupply(DbConnection? connectionIn = null);
+
+        // Rank Boards
+        bool InsertRankRecord(uint characterId, uint questId, long score, DbConnection? connectionIn = null);
+        List<uint> SelectUsedRankingBoardQuests(DbConnection? connectionIn = null);
+        List<CDataRankingData> SelectRankingDataByCharacterId(uint characterId, uint questId, uint limit = 1000, DbConnection? connectionIn = null);
+        List<CDataRankingData> SelectRankingData(uint questId, uint limit = 1000, DbConnection? connectionIn = null);
+        bool DeleteAllRankRecords(DbConnection? connectionIn = null);
+
+        // Partner Pawn
+        bool InsertPartnerPawnRecord(uint characterId, PartnerPawnData partnerPawnData, DbConnection? connectionIn = null);
+        bool UpdatePartnerPawnRecord(uint characterId, PartnerPawnData partnerPawnData, DbConnection? connectionIn = null);
+        PartnerPawnData GetPartnerPawnRecord(uint characterId, uint pawnId, DbConnection? connectionIn = null);
+        bool SetPartnerPawn(uint characterId, uint pawnId, DbConnection? connectionIn = null);
+
+        bool InsertPartnerPawnLastAffectionIncreaseRecord(uint characterId, uint pawnId, PartnerPawnAffectionAction action, DbConnection? connectionIn = null);
+        bool HasPartnerPawnLastAffectionIncreaseRecord(uint characterId, uint pawnId, PartnerPawnAffectionAction action, DbConnection? connectionIn = null);
+        void DeleteAllPartnerPawnLastAffectionIncreaseRecords(DbConnection? connectionIn = null);
+
+        HashSet<uint> GetPartnerPawnPendingRewards(uint characterId, uint pawnId, DbConnection? connectionIn = null);
+        bool InsertPartnerPawnPendingReward(uint characterId, uint pawnId, uint rewardLevel, DbConnection? connectionIn = null);
+        void DeletePartnerPawnPendingReward(uint characterId, uint pawnId, uint rewardLevel, DbConnection? connectionIn = null);
     }
 }

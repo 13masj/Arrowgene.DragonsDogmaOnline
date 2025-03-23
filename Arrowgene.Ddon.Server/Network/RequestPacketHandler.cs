@@ -18,6 +18,12 @@ namespace Arrowgene.Ddon.Server.Network
 
         protected RequestPacketHandler(DdonServer<TClient> server) : base(server)
         {
+#if DEBUG
+            if (!EntitySerializer.Contains(typeof(TResStruct)))
+            {
+                Logger.Error($"RequestPacketHandler missing serializer for {typeof(TResStruct).Name}");
+            }
+#endif
         }
 
         public abstract TResStruct Handle(TClient client, TReqStruct request);
@@ -29,13 +35,33 @@ namespace Arrowgene.Ddon.Server.Network
             {
                 response = Handle(client, request.Structure);
             }
+            catch (SQLiteException ex)
+            {
+                if (ex.ErrorCode == (int)SQLiteErrorCode.Busy)
+                {
+                    response = new TResStruct();
+                    response.Error = (uint)ErrorCode.ERROR_CODE_DB_DEAD_LOCK;
+                }
+                else
+                {
+                    response = new TResStruct();
+                    response.Error = (uint)ErrorCode.ERROR_CODE_DB_FAILURE;
+                }
+                client.Send(response);
+                client.Close(); // Do not tolerate SqLiteExceptions because of desync issues.
+                throw;
+            }
+            catch (NotImplementedException ex)
+            {
+                throw new ResponseErrorException(ErrorCode.ERROR_CODE_NOT_IMPLEMENTED, ex.Message, ex);
+            }
             catch (ResponseErrorException ex)
             {
                 response = new TResStruct();
                 response.Error = (uint) ex.ErrorCode;
 
                 var stringBuilder = new StringBuilder();
-                stringBuilder.AppendLine($"{ex.ErrorCode} thrown when handling {typeof(TReqStruct).Name}");
+                stringBuilder.AppendLine($"{(ex.Critical ? "!!CRITICAL!! " : "")}{ex.ErrorCode} thrown when handling {typeof(TReqStruct).Name}");
                 if (ex.Message.Length > 0)
                 {
                     stringBuilder.AppendLine($"\tMessage: {ex.Message}");
@@ -54,6 +80,7 @@ namespace Arrowgene.Ddon.Server.Network
             {
                 response = new TResStruct();
                 response.Error = (uint) ErrorCode.ERROR_CODE_FAIL;
+                client.Send(response);
                 throw;
             }    
             client.Send(response);

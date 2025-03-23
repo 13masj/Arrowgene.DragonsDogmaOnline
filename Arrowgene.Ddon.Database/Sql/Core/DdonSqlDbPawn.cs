@@ -306,31 +306,28 @@ namespace Arrowgene.Ddon.Database.Sql.Core
             return registeredPawns;
         }
 
-        public uint GetPawnOwnerCharacterId(uint pawnId)
-        {
-            using TCon connection = OpenNewConnection();
-            return GetPawnOwnerCharacterId(connection, pawnId);
-        }
-
-        public uint GetPawnOwnerCharacterId(TCon connection, uint pawnId)
+        public uint GetPawnOwnerCharacterId(uint pawnId, DbConnection? connectionIn = null)
         {
             uint ownerCharacterId = 0;
-            ExecuteReader(
-                connection,
-                SqlSelectPawnOwnerId,
-                command =>
-                {
-                    AddParameter(command, "@pawn_id", pawnId);
-                },
-                reader =>
-                {
-                    if (reader.Read())
+            ExecuteQuerySafe(connectionIn, connection =>
+            {
+                ExecuteReader(
+                    connection,
+                    SqlSelectPawnOwnerId,
+                    command =>
                     {
-                        ownerCharacterId = GetUInt32(reader, "character_id");
+                        AddParameter(command, "@pawn_id", pawnId);
+                    },
+                    reader =>
+                    {
+                        if (reader.Read())
+                        {
+                            ownerCharacterId = GetUInt32(reader, "character_id");
+                        }
                     }
-                }
-            );
-
+                );
+            });
+            
             return ownerCharacterId;
         }
 
@@ -388,36 +385,43 @@ namespace Arrowgene.Ddon.Database.Sql.Core
             return pawns;
         }
 
-        public bool DeletePawn(uint pawnId)
+        public bool DeletePawn(uint pawnId, DbConnection? connectionIn = null)
         {
-            int rowsAffected = ExecuteNonQuery(
-                SqlDeletePawn,
-                command =>
-                {
-                    AddParameter(command, "@pawn_id", pawnId);
-                }
-            );
-            return rowsAffected > NoRowsAffected;
+            return ExecuteQuerySafe<int>(connectionIn, connection =>
+            {
+                return ExecuteNonQuery(
+                    connection,
+                    SqlDeletePawn,
+                    command =>
+                    {
+                        AddParameter(command, "@pawn_id", pawnId);
+                    }
+                );
+            }) > NoRowsAffected;
         }
 
-        public bool UpdatePawnBaseInfo(Pawn pawn)
+        public bool UpdatePawnBaseInfo(Pawn pawn, DbConnection? connectionIn = null)
         {
-            using TCon connection = OpenNewConnection();
-            return UpdatePawnBaseInfo(connection, pawn);
-        }
+            // TODO: Make this less super dangerous.
+            // This has a potential for pawn kidnapping by overwriting the pawn's characterId.
+            // Until we better implement rental pawns, this should ONLY write for main pawns.
 
-        public bool UpdatePawnBaseInfo(TCon conn, Pawn pawn)
-        {
-            int characterUpdateRowsAffected = ExecuteNonQuery(
-                conn,
-                SqlUpdatePawn,
-                command =>
-                {
-                    AddParameter(command, pawn);
-                }
-            );
+            if (pawn.PawnType != PawnType.Main)
+            {
+                return false;
+            }
 
-            return characterUpdateRowsAffected > NoRowsAffected;
+            return ExecuteQuerySafe<int>(connectionIn, (connection) =>
+            {
+                return ExecuteNonQuery(
+                    connection,
+                    SqlUpdatePawn,
+                    command =>
+                    {
+                        AddParameter(command, pawn);
+                    }
+                );
+            }) > NoRowsAffected;
         }
 
         private void QueryPawnData(DbConnection conn, Pawn pawn)
