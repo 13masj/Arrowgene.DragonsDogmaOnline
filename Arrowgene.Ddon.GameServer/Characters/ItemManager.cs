@@ -1,23 +1,16 @@
 #nullable enable
 using Arrowgene.Ddon.Database;
-using Arrowgene.Ddon.Database.Model;
 using Arrowgene.Ddon.Server;
+using Arrowgene.Ddon.Server.Network;
 using Arrowgene.Ddon.Shared.Entity.PacketStructure;
 using Arrowgene.Ddon.Shared.Entity.Structure;
 using Arrowgene.Ddon.Shared.Model;
+using Arrowgene.Ddon.Shared.Model.Quest;
 using Arrowgene.Logging;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Linq;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography;
-using YamlDotNet.Core.Tokens;
-using YamlDotNet.Core;
-using Arrowgene.Ddon.GameServer.Quests;
-using Arrowgene.Ddon.Server.Network;
-using Arrowgene.Ddon.Shared.Model.Quest;
 
 namespace Arrowgene.Ddon.GameServer.Characters
 {
@@ -72,7 +65,9 @@ namespace Arrowgene.Ddon.GameServer.Characters
             {ItemId.RiftCrystal1000Rp, (WalletType.RiftPoints, 1000)},
             {ItemId.BloodOrb1000Bo, (WalletType.BloodOrbs, 1000)},
             // TODO: Requires special item notice type 47, could be offered in adventure pass shop
-            {ItemId.CurrencyForResettingCraftP, (WalletType.ResetCraftSkills, 1)}
+            {ItemId.CurrencyForResettingCraftP, (WalletType.ResetCraftSkills, 1)},
+            {ItemId.SilverTicket, (WalletType.SilverTickets, 1) },
+            {ItemId.CustomMadeServiceTicket, (WalletType.CustomMadeServiceTickets, 1) }
             // TODO: Find all items that add wallet points
         };
 
@@ -231,9 +226,9 @@ namespace Arrowgene.Ddon.GameServer.Characters
         public PacketQueue GatherItem(GameClient client, S2CItemUpdateCharacterItemNtc ntc, InstancedGatheringItem gatheringItem, uint pickedGatherItems, DbConnection? connectionIn = null)
         {
             PacketQueue queue = new PacketQueue();
-            if (ItemIdWalletTypeAndQuantity.ContainsKey((ItemId) gatheringItem.ItemId)) 
+            if (ItemIdWalletTypeAndQuantity.ContainsKey(gatheringItem.ItemId)) 
             {
-                var walletTypeAndQuantity = ItemIdWalletTypeAndQuantity[(ItemId) gatheringItem.ItemId];
+                var walletTypeAndQuantity = ItemIdWalletTypeAndQuantity[gatheringItem.ItemId];
                 uint totalQuantityToAdd = walletTypeAndQuantity.Quantity * gatheringItem.ItemNum;
 
                 ntc.UpdateWalletList.Add(
@@ -644,6 +639,11 @@ namespace Arrowgene.Ddon.GameServer.Characters
             {
                 server.Database.InsertCrest(character.CommonId, item.UId, crest.SlotNo, crest.CrestId, crest.Add, connectionIn);
             }
+
+            foreach (var addStatusParam in item.AddStatusParamList)
+            {
+                server.Database.UpsertEquipmentLimitBreakRecord(character.CharacterId, item.UId, addStatusParam, connectionIn);
+            }
         }
 
         public List<CDataItemUpdateResult> MoveItem(DdonServer<GameClient> server, Character character, Storage fromStorage, ushort fromSlotNo, uint num, Storage toStorage, ushort toSlotNo, DbConnection? connectionIn = null)
@@ -998,7 +998,7 @@ namespace Arrowgene.Ddon.GameServer.Characters
             return results;
         }
 
-        public void SetSafetySetting(GameClient client, Character character, List<CDataItemUIdList> uids, bool safetySetting)
+        public void SetSafetySetting(GameClient client, Character character, List<CDataItemUIDList> uids, bool safetySetting)
         {
             List<(ushort SlotNo, Item Item, uint Amount, Storage Storage)> items = new();
 
@@ -1010,7 +1010,7 @@ namespace Arrowgene.Ddon.GameServer.Characters
             uint updateItemNum = 0;
             foreach (var reqitem in uids)
             {
-                (StorageType storageType, Tuple<ushort, Item, uint> itemProps) = character.Storage.FindItemByUIdInStorage(ItemManager.AllItemStorages, reqitem.UId);
+                (StorageType storageType, Tuple<ushort, Item, uint> itemProps) = character.Storage.FindItemByUIdInStorage(ItemManager.AllItemStorages, reqitem.ItemUID);
                 var (slotNo, item, amount) = itemProps;
                 var storage = character.Storage.GetStorage(storageType);
 

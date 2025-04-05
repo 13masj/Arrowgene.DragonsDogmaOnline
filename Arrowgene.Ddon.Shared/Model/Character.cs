@@ -42,8 +42,9 @@ namespace Arrowgene.Ddon.Shared.Model
             EpitaphRoadState = new EpitaphRoadState();
             AreaRanks = new();
             AreaSupply = new();
-
             PartnerTimerLockObj = new();
+            ContentsReleased = new HashSet<ContentsRelease>();
+            WorldManageUnlocks = new Dictionary<QuestId, List<QuestFlagInfo>>();
         }
 
         public int AccountId { get; set; }
@@ -133,22 +134,66 @@ namespace Arrowgene.Ddon.Shared.Model
         public Dictionary<QuestAreaId, AreaRank> AreaRanks { get; set; }
         public Dictionary<QuestAreaId, List<CDataRewardItemInfo>> AreaSupply { get; set; }
 
+        public HashSet<ContentsRelease> ContentsReleased { get; set; }
+        public Dictionary<QuestId, List<QuestFlagInfo>> WorldManageUnlocks { get; set; }
+
         // TODO: Move to a more sensible place
         public uint LastEnteredShopId { get; set; }
 
-        public Pawn PawnBySlotNo(byte SlotNo)
+        public Pawn PawnBySlotNo(byte slotNo)
         {
-            return Pawns[SlotNo-1];
+            if (slotNo > Pawns.Count)
+            {
+                throw new ResponseErrorException(ErrorCode.ERROR_CODE_PAWN_INVALID_SLOT_NO,
+                    $"Requesting invalid main pawn slot {slotNo} for character {CharacterId}");
+            }
+
+            return Pawns[slotNo - 1];
         }
 
         public Pawn RentedPawnBySlotNo(byte slotNo)
         {
+            if (slotNo > RentedPawns.Count)
+            {
+                throw new ResponseErrorException(ErrorCode.ERROR_CODE_PAWN_INVALID_SLOT_NO,
+                    $"Requesting invalid rented slot {slotNo} for character {CharacterId}");
+            }
+
             return RentedPawns[slotNo - 1];
         }
 
         public void RemovedRentedPawnBySlotNo(byte slotNo)
         {
+            if (slotNo > RentedPawns.Count)
+            {
+                throw new ResponseErrorException(ErrorCode.ERROR_CODE_PAWN_INVALID_SLOT_NO,
+                    $"Removing invalid rented slot {slotNo} for character {CharacterId}");
+            }
+
             RentedPawns.RemoveAt(slotNo - 1);
+        }
+
+        public Pawn PawnById(uint pawnId, PawnType type = PawnType.None)
+        {
+            switch (type)
+            {
+                case PawnType.Main:
+                    var mainPawn = Pawns.Where(x => x.PawnId == pawnId).FirstOrDefault();
+                    if (mainPawn is not null)
+                    {
+                        return mainPawn;
+                    }
+                    break;
+                case PawnType.Support:
+                    var rentalPawn = RentedPawns.Where(x => x.PawnId == pawnId).FirstOrDefault();
+                    if (rentalPawn is not null)
+                    {
+                        return rentalPawn;
+                    }
+                    break;
+            }
+
+            throw new ResponseErrorException(ErrorCode.ERROR_CODE_PAWN_NOT_FOUNDED, $"Could not find pawn with ID {pawnId}, type {type}");
         }
 
         public Dictionary<ulong, bool> ContextOwnership { get; set; }
@@ -172,6 +217,52 @@ namespace Arrowgene.Ddon.Shared.Model
                 },
                 ClanName = ClanName.ShortName
             };
+        }
+
+        public List<CDataCharacterReleaseElement> GetReleasedContent()
+        {
+            return ContentsReleased.Select(x => x.ToCDataCharacterReleaseElement()).ToList();
+        }
+
+        public bool HasContentReleased(ContentsRelease releaseId)
+        {
+            return ContentsReleased.Contains(releaseId);
+        }
+
+        public List<CDataQuestFlag> GetWorldManageQuestUnlocks(QuestId questId)
+        {
+            if (!WorldManageUnlocks.ContainsKey(questId))
+            {
+                return new();
+            }
+
+            return WorldManageUnlocks[questId]
+                .Where(x => x.FlagType == QuestFlagType.WorldManageQuest)
+                .Select(x => new CDataQuestFlag() { FlagId = x.Value })
+                .ToList();
+        }
+
+        public List<CDataQuestLayoutFlag> GetWorldManageLayoutUnlocks(QuestId questId)
+        {
+            if (!WorldManageUnlocks.ContainsKey(questId))
+            {
+                return new();
+            }
+
+            return WorldManageUnlocks[questId]
+                .Where(x => x.FlagType == QuestFlagType.WorldManageLayout)
+                .Select(x => new CDataQuestLayoutFlag() { FlagId = x.Value })
+                .ToList();
+        }
+
+        public bool HasQuestCompleted(QuestId questId)
+        {
+            return CompletedQuests.ContainsKey(questId);
+        }
+
+        public bool HasJobOfLevel(JobId jobId, uint level)
+        {
+            return CharacterJobDataList.Any(x => x.Job == jobId && x.Lv >= level);
         }
     }
 }
